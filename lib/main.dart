@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'maplibre_gl/map.dart';
+import 'config/routes.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  runApp(const MainApp());
+  runApp(
+    const ProviderScope(
+      child: MainApp()
+    )
+  );
 }
 
 class MainApp extends StatelessWidget {
@@ -10,12 +15,17 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: MapPage(),
+    return MaterialApp.router(
+      title: 'Map Tracking App',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          primary: Colors.blue,
+          secondary: Colors.green,
         ),
+        useMaterial3: true,
       ),
+      routerConfig: router,
     );
   }
 }
