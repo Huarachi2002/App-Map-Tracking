@@ -1,4 +1,3 @@
-
 import 'package:app_map_tracking/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,13 +18,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   String? _errorMessage;
 
   @override
-  void dispose(){
+  void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value){
+  String? _validateEmail(String? value) {
     if (value == null || value.isEmpty) {
       return 'El email es requerido';
     }
@@ -35,7 +34,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return null;
   }
 
-  String? _validatePassword(String? value){
+  String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'La contraseña es requerida';
     }
@@ -57,12 +56,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     try {
       await ref.read(authStateProvider.notifier).login(
-        _emailController.text,
-        _passwordController.text,
-      );
+            _emailController.text,
+            _passwordController.text,
+          );
+      final user = ref.read(currentUsuarioProvider);
 
-      if(mounted){
-        context.go('/');
+      if (mounted) {
+        if (user!.tipo == 'CLIENTE') {
+          context.go('/home-client');
+        } else if (user.tipo == 'EMPLEADO') {
+          context.go('/home-employee');
+        } else {
+          setState(() {
+            _errorMessage = 'Tipo de usuario no reconocido';
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -132,7 +140,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
               const SizedBox(height: 16.0),
               TextButton(
-                onPressed: () => context.go('/sign-up'), 
+                onPressed: () => context.go('/sign-up'),
                 child: const Text(
                   '¿No tienes una cuenta? Regístrate',
                   style: TextStyle(color: Colors.blue),
