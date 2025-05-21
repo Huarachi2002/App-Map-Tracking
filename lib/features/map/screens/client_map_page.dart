@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../../common/utils.dart';
+import '../../../common/widgets/app_drawer.dart';
 import '../../../config/constants.dart';
 
 class ClientMapPage extends StatelessWidget {
@@ -27,96 +28,154 @@ class Map extends ConsumerStatefulWidget {
 }
 
 class MapState extends ConsumerState<Map> {
-  // Auth state management
-  late final authState;
-
+  MapLibreMapController? _controller;
   final Future<String> styles = initStyle();
   final Completer<MapLibreMapController> mapController = Completer();
   bool canInteractWithMap = false;
   Symbol? currentLocationSymbol;
+  StreamSubscription? _locationSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Get initial auth state
-    authState = ref.read(authStateProvider);
-
-    // Listen to auth state changes
-    ref.listen(authStateProvider, (previous, next) {
-      // Handle auth state changes if needed
-      setState(() {
-        authState = next;
-      });
-    });
     _initializeTracking();
-    super.initState();
   }
 
   Future<void> _loadImages(MapLibreMapController controller) async {
-    await controller.addImage("bus-marker",
-        await _loadImageFromAsset("assets/images/bus-marker.png"));
+    try {
+      await controller.addImage(
+        "bus-marker",
+        await _loadImageFromAsset("assets/images/bus-marker.png"),
+      );
+    } catch (e) {
+      print("Error loading images: $e");
+    }
   }
 
   Future<Uint8List> _loadImageFromAsset(String assetPath) async {
-    final ByteData data = await rootBundle.load(assetPath);
-    final Uint8List bytes = data.buffer.asUint8List();
-    return bytes;
+    try {
+      final ByteData data = await rootBundle.load(assetPath);
+      return data.buffer.asUint8List();
+    } catch (e) {
+      print("Error loading asset: $e");
+      // Retorna una imagen vacía para evitar errores
+      return Uint8List(0);
+    }
   }
 
   Future<void> _initializeTracking() async {
-    final trackingService = ref.read(trackingServiceProvider);
+    try {
+      final trackingService = ref.read(trackingServiceProvider);
 
-    await trackingService.initSocket(
-      baseUrl,
-      'id_micro',
-      'tu-token-jwt',
-    );
+      await trackingService.initSocket(
+        baseUrl,
+        'id_micro',
+        'tu-token-jwt',
+      );
 
-    trackingService.on(TrackingEventType.locationUpdate).listen((data) {
-      _updateLocationOnMap(LatLng(data['latitud'], data['longitud']));
-    });
+      _locationSubscription = trackingService
+          .on(TrackingEventType.locationUpdate)
+          .listen((data) {
+        _updateLocationOnMap(LatLng(data['latitud'], data['longitud']));
+      });
+    } catch (e) {
+      print("Error initializing tracking: $e");
+    }
   }
 
   Future<void> _updateLocationOnMap(LatLng location) async {
-    final controller = await mapController.future;
+    try {
+      if (!mapController.isCompleted) return;
+      
+      final controller = await mapController.future;
 
-    if (currentLocationSymbol != null) {
-      await controller.removeSymbol(currentLocationSymbol!);
+      if (currentLocationSymbol != null) {
+        await controller.removeSymbol(currentLocationSymbol!);
+      }
+
+      currentLocationSymbol = await controller.addSymbol(SymbolOptions(
+        geometry: location,
+        iconImage: "bus-marker",
+        iconSize: 1.5,
+        iconOffset: const Offset(0, -20),
+      ));
+
+      await controller.animateCamera(CameraUpdate.newLatLng(location));
+    } catch (e) {
+      print("Error updating location on map: $e");
     }
-
-    currentLocationSymbol = await controller.addSymbol(SymbolOptions(
-      geometry: location,
-      iconImage: "bus-marker",
-      iconSize: 1.5,
-      iconOffset: const Offset(0, -20),
-    ));
-
-    await controller.animateCamera(CameraUpdate.newLatLng(location));
   }
 
   @override
   void dispose() {
-    ref.read(trackingServiceProvider).dispose();
+    // Cancela la suscripción
+    _locationSubscription?.cancel();
+    
+    // Dispone el servicio de tracking
+    // final trackingService = ref.read(trackingServiceProvider);
+    // trackingService.dispose();
+    
+    // Dispone el controlador del mapa
+    if (mapController.isCompleted) {
+      mapController.future.then((controller) {
+        controller.dispose();
+      });
+    }
+    
     super.dispose();
   }
 
   static Future<String> initStyle() async {
-    final file = await copyAssetToFile(
-      'assets/santa_cruz.mbtiles',
-    );
-    String styleFile = await leerArchivoAssets('assets/maplibre/style.json');
-
-    styleFile =
-        styleFile.replaceAll('___FILE_URI___', 'mbtiles:///${file.path}');
-    // .replaceAll('asset://maplibre/glyphs', 'file:///data/user/0/com.example.app_map_tracking/cache/sprites/sprite')
-    // .replaceAll('asset://maplibre/sprites/sprite', 'file:///data/user/0/com.example.app_map_tracking/cache/sprites/sprite');
-
-    return styleFile ?? "";
+    try {
+      // iniciarSeguimiento();
+      final file = await copyAssetToFile('assets/santa_cruz.mbtiles');
+      String styleFile = await leerArchivoAssets('assets/maplibre/style.json');
+      styleFile = styleFile.replaceAll('___FILE_URI___', 'mbtiles:///${file.path}');
+      return styleFile;
+    } catch (e) {
+      print("Error initializing style: $e");
+      return "";
+    }
   }
 
+  // Future<void> _addPolyline() async {
+  //   final line = {
+  //     "type": "FeatureCollection",
+  //     "features": [
+  //       {
+  //         "type": "Feature",
+  //         "properties": {},
+  //         "geometry": {
+  //           "type": "LineString",
+  //           "coordinates": [
+  //             [-63.1836952, -17.783915211],
+  //             [-63.1838899, -17.781858371],
+  //           ]
+  //         }
+  //       }
+  //     ]
+  //   };
+
+  //   _controller.addGeoJsonSource("line-source", line);
+
+  //   _controller?.addLine(const LineOptions(
+  //       geometry: [
+  //         LatLng(-17.783915211, -63.1836952),
+  //         LatLng(-17.781858371, -63.1838899),
+  //       ],
+  //       lineColor: "#ff0000",
+  //       lineWidth: 3.0,
+  //       lineOpacity: 0.5,
+  //       draggable: true),);
+  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mapa Cliente'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+      drawer: const AppDrawer(),
       body: FutureBuilder<String>(
           future: styles,
           builder: (context, snapshot) {
@@ -126,8 +185,7 @@ class MapState extends ConsumerState<Map> {
                   mapController.complete(controller);
                   _loadImages(controller);
                 },
-                // styleString: "$styleUrl?key=$apiKey",
-                styleString: snapshot.data!,
+                styleString: "$styleUrl?key=$apiKey",
                 initialCameraPosition: const CameraPosition(
                     zoom: 13.0, target: LatLng(-17.78314, -63.18084)),
                 trackCameraPosition: true,

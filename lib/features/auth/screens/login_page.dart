@@ -43,7 +43,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
     return null;
   }
-
   Future<void> _login(BuildContext context) async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -54,15 +53,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       _errorMessage = null;
     });
 
-    try {
-      await ref.read(authStateProvider.notifier).login(
+    try {      await ref.read(authStateProvider.notifier).login(
             _emailController.text,
             _passwordController.text,
           );
-      final user = ref.read(currentUsuarioProvider);
+      
+      // Obtener el usuario directamente del userProvider
+      final user = ref.read(userProvider);
+      print("Usuario después del login desde userProvider: $user");
 
       if (mounted) {
-        if (user!.tipo == 'CLIENTE') {
+        if (user == null) {
+          setState(() {
+            _errorMessage = 'Error: No se pudo obtener la información del usuario';
+          });
+        } else if (user.tipo == 'CLIENTE') {
           context.go('/home-client');
         } else if (user.tipo == 'EMPLEADO') {
           context.go('/home-employee');
@@ -73,6 +78,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         }
       }
     } catch (e) {
+      print("Error capturado en login: $e");
       setState(() {
         _errorMessage = 'Error de inicio de sesión: $e';
       });
