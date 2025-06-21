@@ -51,8 +51,8 @@
       "url": "___FILE_URI___"
     }
   },
-  "sprite": "file:///data/user/0/com.example.app_map_tracking/cache/sprites/sprite",
-  "glyphs": "file:///data/user/0/com.example.app_map_tracking/cache/glyphs/{fontstack}/{range}.pbf",
+  "sprite": "asset://sprites/sprite",
+  "glyphs": "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",

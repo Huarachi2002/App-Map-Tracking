@@ -1,10 +1,17 @@
+import 'package:app_map_tracking/common/app_cycle_observer.dart';
 import 'package:flutter/material.dart';
 import 'config/routes.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void main() {
+final AppLifecycleObserver lifecycleObserver = AppLifecycleObserver();
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  lifecycleObserver.start();
+
+  // await LocationBackgroundService().initialize(); // Comentado temporalmente - usando TrackingSocketService
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

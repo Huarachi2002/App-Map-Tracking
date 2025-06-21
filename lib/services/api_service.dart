@@ -10,6 +10,7 @@ class ApiService {
     required this.baseUrl,
     http.Client? client,
   }) : _client = client ?? http.Client();
+
   Future<Map<String, dynamic>> get(String endpoint) async {
     final response = await _client.get(
       Uri.parse('$baseUrl/$endpoint'),

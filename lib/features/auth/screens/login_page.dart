@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  final String tipoUsuario;
+  
+  const LoginPage({Key? key, required this.tipoUsuario}) : super(key: key);
 
   @override
   _LoginPageState createState() => _LoginPageState();
@@ -16,6 +18,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _hasOfflineCredentials = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOfflineCredentials();
+  }
+
+  Future<void> _checkOfflineCredentials() async {
+    final authNotifier = ref.read(authStateProvider.notifier);
+    final hasOffline = await authNotifier.hasOfflineCredentials();
+    setState(() {
+      _hasOfflineCredentials = hasOffline;
+    });
+  }
 
   @override
   void dispose() {
@@ -67,13 +84,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           setState(() {
             _errorMessage = 'Error: No se pudo obtener la información del usuario';
           });
-        } else if (user.tipo == 'CLIENTE') {
-          context.go('/home-client');
-        } else if (user.tipo == 'EMPLEADO') {
-          context.go('/home-employee');
+        } else if (user.esCliente || widget.tipoUsuario == 'cliente') {
+          print('👤 Redirigiendo a mapa cliente');
+          context.go('/client-map');
+        } else if (user.esMicrero || widget.tipoUsuario == 'micrero') {
+          print('🚌 Redirigiendo a dashboard micrero - Usuario: ${user.nombre}, Tipo: ${user.tipo}');
+          context.go('/micrero-dashboard');
         } else {
           setState(() {
-            _errorMessage = 'Tipo de usuario no reconocido';
+            _errorMessage = 'Tipo de usuario no reconocido: ${user.tipo}';
           });
         }
       }
@@ -91,67 +110,271 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  void _handleLogin() {
+    _login(context);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    final isLoading = authState == AuthState.loading;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Iniciar sesión'),
+        title: const Text('Iniciar Sesión'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Navegar de vuelta a la selección de tipo de usuario
+            context.go('/user-type-selection');
+          },
+        ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              //Todo: Logo o Imagen
-              const SizedBox(height: 32.0),
+              // Información del servidor
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  border: Border.all(color: Colors.blue.shade200),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🌐 Servidor: http://localhost:3001/api',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '🔧 Conexión local para desarrollo',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
+              // NUEVO: Indicador de modo offline
+              if (_hasOfflineCredentials)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    border: Border.all(color: Colors.orange.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.offline_bolt,
+                        color: Colors.orange.shade700,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Modo Offline Disponible',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade700,
+                              ),
+                            ),
+                            Text(
+                              'Puedes iniciar sesión sin internet usando credenciales guardadas',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
+              // Campo de email
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
-                  labelText: 'Email',
+                  labelText: 'Correo electrónico',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email),
                 ),
-                keyboardType: TextInputType.emailAddress,
-                validator: _validateEmail,
+                validator: (value) {
+                  if (value?.isEmpty ?? true) {
+                    return 'Por favor ingresa tu correo';
+                  }
+                  return null;
+                },
               ),
+              const SizedBox(height: 16),
+
+              // Campo de contraseña
               TextFormField(
                 controller: _passwordController,
+                obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Contraseña',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock),
                 ),
-                obscureText: true,
-                validator: _validatePassword,
+                validator: (value) {
+                  if (value?.isEmpty ?? true) {
+                    return 'Por favor ingresa tu contraseña';
+                  }
+                  return null;
+                },
               ),
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
+              const SizedBox(height: 24),
+
+              // Usuarios de prueba
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  border: Border.all(color: Colors.green.shade200),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              const SizedBox(height: 16.0),
-              ElevatedButton(
-                onPressed: _isLoading ? null : () => _login(context),
-                child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('Iniciar sesión'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '👤 Usuarios de Prueba:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '🚐 Micrero: carlos.mamani@crucero.bo / password123',
+                      style: TextStyle(fontSize: 12, color: Colors.green.shade600),
+                    ),
+                    Text(
+                      '🔧 Debug: debug@crucero.bo / password123',
+                      style: TextStyle(fontSize: 12, color: Colors.green.shade600),
+                    ),
+                  ],
+                ),
               ),
 
-              const SizedBox(height: 16.0),
-              TextButton(
-                onPressed: () => context.go('/sign-up'),
-                child: const Text(
-                  '¿No tienes una cuenta? Regístrate',
-                  style: TextStyle(color: Colors.blue),
+              // Botones de login rápido
+              Row(
+                children: [
+                  // Botón de login rápido para chofer
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8, bottom: 16),
+                      child: ElevatedButton.icon(
+                        onPressed: isLoading ? null : () {
+                          // Llenar campos automáticamente
+                          _emailController.text = 'marco.chofer@gmail.com';
+                          _passwordController.text = '12345678';
+                          // Ejecutar login automáticamente
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            _handleLogin();
+                          });
+                        },
+                        icon: const Icon(Icons.flash_on, color: Colors.white, size: 18),
+                        label: const Text(
+                          '⚡ Chofer',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Botón de login rápido para cliente
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 8, bottom: 16),
+                      child: ElevatedButton.icon(
+                        onPressed: isLoading ? null : () {
+                          // Llenar campos automáticamente
+                          _emailController.text = 'jose.cliente@gmail.com';
+                          _passwordController.text = '12345678';
+                          // Ejecutar login automáticamente
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            _handleLogin();
+                          });
+                        },
+                        icon: const Icon(Icons.person, color: Colors.white, size: 18),
+                        label: const Text(
+                          '⚡ Cliente',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Botón de inicio de sesión
+              ElevatedButton(
+                onPressed: isLoading ? null : _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-              )
+                child: isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Iniciar Sesión'),
+              ),
+              const SizedBox(height: 16),
+
+              // Link a registro
+              TextButton(
+                onPressed: () {
+                  context.push('/register');
+                },
+                child: const Text('¿No tienes cuenta? Regístrate aquí'),
+              ),
+              
+              // Espaciado adicional para evitar overflow
+              const SizedBox(height: 32),
             ],
           ),
         ),

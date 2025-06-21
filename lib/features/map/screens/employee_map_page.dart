@@ -1,206 +1,256 @@
 import 'dart:async';
-import 'package:app_map_tracking/features/auth/providers/auth_provider.dart';
-import 'package:app_map_tracking/features/tracking/providers/tracking_provider.dart';
-import 'package:app_map_tracking/services/tracking_socket_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
-import '../../../common/utils.dart';
 import '../../../common/widgets/app_drawer.dart';
 import '../../../config/constants.dart';
+import '../../../features/auth/providers/auth_provider.dart';
+import '../providers/map_state_provider.dart';
+import '../services/map_service.dart';
+import '../widgets/map_status_indicator.dart';
+import '../widgets/driver_info_panel.dart';
+import '../widgets/map_floating_buttons.dart';
 
-class EmployeeMapPage extends StatelessWidget {
+class EmployeeMapPage extends ConsumerStatefulWidget {
   const EmployeeMapPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const Map();
-  }
+  ConsumerState<EmployeeMapPage> createState() => _EmployeeMapPageState();
 }
 
-class Map extends ConsumerStatefulWidget {
-  const Map({super.key});
-
-  @override
-  ConsumerState<Map> createState() => MapState();
-}
-
-class MapState extends ConsumerState<Map> {
-  MapLibreMapController? _controller;
-  final Future<String> styles = initStyle();
+class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
   final Completer<MapLibreMapController> mapController = Completer();
-  bool canInteractWithMap = false;
-  bool _imageLoaded = false;
-  Symbol? currentLocationSymbol;
-  StreamSubscription? _locationSubscription;
+  MapService? _mapService;
+  bool _mounted = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeTracking();
-  }
-
-  Future<void> _loadImages(MapLibreMapController controller) async {
-    try {
-      print("Cargando imagen del marcador...");
-      final imageBytes = await _loadImageFromAsset("assets/images/bus-marker.png");
-      print("Bytes de imagen cargados: ${imageBytes.length}");
-      
-      // En caso de error con la imagen original, prueba una imagen más simple
-      if (imageBytes.isEmpty) {
-        print("Usando imagen simple de fallback");
-        // Crear una imagen simple en memoria como fallback
-        final size = 8;
-        final bytes = Uint8List(size * size * 4);
-        for (var i = 0; i < size * size; i++) {
-          bytes[i * 4] = 255;      // R
-          bytes[i * 4 + 1] = 0;    // G
-          bytes[i * 4 + 2] = 0;    // B
-          bytes[i * 4 + 3] = 255;  // A
-        }
-        await controller.addImage("bus-marker", bytes);
-      } else {
-        await controller.addImage("bus-marker", imageBytes);
-      }
-      _imageLoaded = true;
-      print("Imagen cargada con éxito");
-    } catch (e) {
-      print("Error loading images: $e");
-    }
-  }
-
-  Future<Uint8List> _loadImageFromAsset(String assetPath) async {
-    try {
-      final ByteData data = await rootBundle.load(assetPath);
-      return data.buffer.asUint8List();
-    } catch (e) {
-      print("Error loading asset: $e");
-      // Retorna una imagen vacía para evitar errores
-      return Uint8List(0);
-    }
-  }
-
-  Future<void> _initializeTracking() async {
-    try {
-      
-      final trackingService = ref.read(trackingServiceProvider);
-      final user = ref.read(userProvider);
-
-      if (user == null || user.empleado == null) {
-        print("No hay un empleado autenticado o falta información");
-        return;
-      }
-
-      final String idMicro = user.empleado!.id_micro;
-      final String token = user.token;
-      print("ID Micro: $idMicro");
-      print("Token: $token");
-      await trackingService.initSocket(
-        baseUrlSocket,
-        idMicro,
-        token,
-      );
-
-      trackingService.on(TrackingEventType.locationUpdate).listen((data) {
-        _updateLocationOnMap(LatLng(data['latitud'], data['longitud']));
-      });
-    } catch (e) {
-      print("Error initializing tracking: $e");
-    }
-  }
-
-  Future<void> _updateLocationOnMap(LatLng location) async {
-    try {
-      if (!mapController.isCompleted || !_imageLoaded) return;
-      
-      final controller = await mapController.future;
-
-      if (currentLocationSymbol != null) {
-        await controller.removeSymbol(currentLocationSymbol!);
-      }
-
-      currentLocationSymbol = await controller.addSymbol(SymbolOptions(
-        geometry: location,
-        iconImage: "bus-marker",
-        iconSize: 0.8,
-      ));
-
-      await controller.animateCamera(CameraUpdate.newLatLng(location));
-    } catch (e) {
-      print("Error updating location on map: $e");
-    }
+    _initializeServices();
   }
 
   @override
   void dispose() {
-    // Cancela la suscripción
-    _locationSubscription?.cancel();
-    
-    // Dispone el servicio de tracking
-    // final trackingService = ref.read(trackingServiceProvider);
-    // trackingService.dispose();
-    
-    // Dispone el controlador del mapa
-    if (mapController.isCompleted) {
-      mapController.future.then((controller) {
-        controller.dispose();
-      });
-    }
-    
+    _mounted = false;
+    _mapService?.dispose();
     super.dispose();
   }
 
-  static Future<String> initStyle() async {
-    try {
-      // iniciarSeguimiento();
-      final file = await copyAssetToFile('assets/santa_cruz.mbtiles');
-      String styleFile = await leerArchivoAssets('assets/maplibre/style.json');
-      styleFile = styleFile.replaceAll('___FILE_URI___', 'mbtiles:///${file.path}');
-      return styleFile;
-    } catch (e) {
-      print("Error initializing style: $e");
-      return "";
+  Future<void> _initializeServices() async {
+    _mapService = MapService(ref);
+  }
+
+  void _onMapCreated(MapLibreMapController controller) async {
+    if (!mapController.isCompleted) {
+      mapController.complete(controller);
     }
+    
+    // Inicializar mapa con el servicio
+    if (_mapService != null) {
+      await _mapService!.initializeMap(controller);
+    }
+  }
+
+  void _onStyleLoaded() {
+    // Cargar ruta después de que el estilo esté cargado
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mapController.isCompleted && _mapService != null) {
+        final controller = await mapController.future;
+        await _mapService!.loadRoute(controller);
+      }
+    });
+  }
+
+  Future<void> _toggleTracking() async {
+    final mapState = ref.read(mapStateProvider);
+    
+    if (mapState.isServiceActive) {
+      await _stopTracking();
+    } else {
+      await _startTracking();
+    }
+  }
+
+  Future<void> _startTracking() async {
+    if (_mapService == null || !_mounted) return;
+    
+    try {
+      await _mapService!.startTracking();
+      
+      if (_mounted) {
+        _showSuccess('Servicio de tracking iniciado');
+      }
+      
+    } catch (e) {
+      if (_mounted) {
+        print('❌ Error al iniciar tracking: $e');
+        _showError('Error al iniciar el servicio: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _stopTracking() async {
+    if (_mapService == null) return;
+    
+    MapLibreMapController? controller;
+    if (mapController.isCompleted) {
+      controller = await mapController.future;
+    }
+    
+    await _mapService!.stopTracking(controller);
+    
+    if (_mounted) {
+      _showSuccess('Servicio de tracking detenido');
+    }
+  }
+
+  Future<void> _centerOnMicro() async {
+    if (_mapService == null || !mapController.isCompleted) return;
+    
+    final controller = await mapController.future;
+    await _mapService!.centerOnMicro(controller);
+  }
+
+  void _showError(String message) {
+    if (!_mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    if (!_mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(userProvider);
+    final mapState = ref.watch(mapStateProvider);
+
+    // Escuchar cambios de posición y actualizar marcador + socket
+    ref.listen(mapStateProvider.select((state) => state.currentPosition), (previous, next) async {
+      if (next == null || !_mounted || _mapService == null) return;
+      
+      if (mapController.isCompleted) {
+        final controller = await mapController.future;
+        await _mapService!.handleLocationUpdate(controller, next);
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapa Empleado'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: const Text('Mapa Micrero'),
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: Icon(mapState.isServiceActive ? Icons.stop : Icons.play_arrow),
+            onPressed: _toggleTracking,
+            tooltip: mapState.isServiceActive ? 'Detener Tracking' : 'Iniciar Tracking',
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
-      body: FutureBuilder<String>(
-          future: styles,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return MapLibreMap(
-                onMapCreated: (controller) {
-                  _controller = controller;
-                  mapController.complete(controller);
-                },
-                styleString: "$styleUrl?key=$apiKey",
-                // styleString: snapshot.data!,
-                initialCameraPosition: const CameraPosition(
-                    zoom: 13.0, target: LatLng(-17.78314, -63.18084)),
-                trackCameraPosition: true,
-                minMaxZoomPreference: const MinMaxZoomPreference(5.0, 20.0),
-                onStyleLoadedCallback: () {
-                  setState(() => canInteractWithMap = true);
-                  if (_controller != null) {
-                    _loadImages(_controller!);
-                  }
-                },
-              );
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text(snapshot.error.toString()));
-            }
-            return const Center(child: CircularProgressIndicator());
-          }),
+      body: Stack(
+        children: [
+          // Mapa principal
+          MapLibreMap(
+            onMapCreated: _onMapCreated,
+            styleString: "$styleUrl?key=$apiKey",
+            initialCameraPosition: const CameraPosition(
+              zoom: 15.0,
+              target: LatLng(-17.78314, -63.18084), // Santa Cruz
+            ),
+            trackCameraPosition: true,
+            minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0),
+            onStyleLoadedCallback: _onStyleLoaded,
+          ),
+
+          // Indicador de estado
+          MapStatusIndicator(
+            isServiceActive: mapState.isServiceActive,
+            followMicro: mapState.followMicro,
+          ),
+
+          // Panel de información del conductor
+          DriverInfoPanel(
+            user: user,
+            isServiceActive: mapState.isServiceActive,
+          ),
+
+          // Botón de acción principal
+          Positioned(
+            bottom: 32,
+            left: 16,
+            right: 16,
+            child: ElevatedButton.icon(
+              onPressed: _toggleTracking,
+              icon: Icon(
+                mapState.isServiceActive ? Icons.stop : Icons.play_arrow,
+                color: Colors.white,
+              ),
+              label: Text(
+                mapState.isServiceActive ? 'Detener Servicio' : 'Iniciar Servicio',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: mapState.isServiceActive ? Colors.red : Colors.green,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+
+          // Información de ubicación actual
+          if (mapState.currentPosition != null)
+            Positioned(
+              bottom: 120,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Lat: ${mapState.currentPosition!.latitude.toStringAsFixed(6)}\n'
+                  'Lng: ${mapState.currentPosition!.longitude.toStringAsFixed(6)}\n'
+                  'Precisión: ${mapState.currentPosition!.accuracy.toStringAsFixed(1)}m',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: MapFloatingButtons(
+        isServiceActive: mapState.isServiceActive,
+        followMicro: mapState.followMicro,
+        onToggleTracking: _toggleTracking,
+        onCenterOnMicro: _centerOnMicro,
+      ),
     );
   }
 }
