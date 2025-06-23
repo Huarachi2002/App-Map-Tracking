@@ -131,7 +131,7 @@ class LocationBackgroundService {
       service.stopSelf();
     });
 
-    Timer.periodic(const Duration(seconds: 5), (timer) async {
+    Timer.periodic(const Duration(seconds: 2), (timer) async {
       // Verificar permisos y servicio de ubicación antes de obtener posición
       if (!await _checkLocationPermissions()) {
         print("LocationBackgroundService: ❌ Permisos de ubicación no disponibles");

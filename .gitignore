@@ -47,3 +47,5 @@ app.*.map.json
 
 # MAPAS
 *.mbtiles
+
+/android/app/.cxx/Debug/

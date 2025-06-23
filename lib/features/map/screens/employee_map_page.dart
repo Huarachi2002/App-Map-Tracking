@@ -8,6 +8,8 @@ import '../../../config/constants.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../providers/map_state_provider.dart';
 import '../services/map_service.dart';
+import '../services/location_service.dart';
+import '../services/enhanced_marker_service.dart';
 import '../widgets/map_status_indicator.dart';
 import '../widgets/driver_info_panel.dart';
 import '../widgets/map_floating_buttons.dart';
@@ -22,7 +24,10 @@ class EmployeeMapPage extends ConsumerStatefulWidget {
 class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
   final Completer<MapLibreMapController> mapController = Completer();
   MapService? _mapService;
+  LocationService? _locationService;
+  EnhancedMarkerService? _markerService;
   bool _mounted = true;
+  bool _isViewingLocationOnly = false;
 
   @override
   void initState() {
@@ -34,11 +39,15 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
   void dispose() {
     _mounted = false;
     _mapService?.dispose();
+    _locationService?.dispose();
+    _markerService?.dispose();
     super.dispose();
   }
 
   Future<void> _initializeServices() async {
     _mapService = MapService(ref);
+    _locationService = LocationService(ref);
+    _markerService = EnhancedMarkerService(ref);
   }
 
   void _onMapCreated(MapLibreMapController controller) async {
@@ -79,6 +88,9 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
       await _mapService!.startTracking();
       
       if (_mounted) {
+        setState(() {
+          _isViewingLocationOnly = false;
+        });
         _showSuccess('Servicio de tracking iniciado');
       }
       
@@ -101,7 +113,78 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
     await _mapService!.stopTracking(controller);
     
     if (_mounted) {
+      setState(() {
+        _isViewingLocationOnly = false;
+      });
       _showSuccess('Servicio de tracking detenido');
+    }
+  }
+
+  Future<void> _startLocationViewOnly() async {
+    if (_locationService == null || _markerService == null || !_mounted) return;
+    
+    try {
+      print('📍 Iniciando modo solo visualización de ubicación...');
+      
+      // Verificar permisos
+      if (!await _locationService!.checkLocationPermissions()) {
+        throw Exception('Permisos de ubicación denegados');
+      }
+      
+      // Obtener ubicación actual
+      final position = await _locationService!.getCurrentPosition();
+      if (position == null) {
+        throw Exception('No se pudo obtener la ubicación actual');
+      }
+      
+      // Actualizar estado local
+      ref.read(mapStateProvider.notifier).setCurrentPosition(position);
+      
+      // Crear marcador en el mapa
+      if (mapController.isCompleted) {
+        final controller = await mapController.future;
+        await _markerService!.updateMarkerPosition(controller, position);
+        
+        // Centrar la cámara en la ubicación
+        await controller.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(position.latitude, position.longitude), 
+            16.0
+          ),
+          duration: const Duration(milliseconds: 800),
+        );
+      }
+      
+      if (_mounted) {
+        setState(() {
+          _isViewingLocationOnly = true;
+        });
+        _showSuccess('Ubicación mostrada (sin servicio activo)');
+      }
+      
+    } catch (e) {
+      if (_mounted) {
+        print('❌ Error al mostrar ubicación: $e');
+        _showError('Error al obtener ubicación: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _stopLocationViewOnly() async {
+    if (_markerService == null) return;
+    
+    MapLibreMapController? controller;
+    if (mapController.isCompleted) {
+      controller = await mapController.future;
+    }
+    
+    await _markerService!.clearMarker(controller);
+    
+    if (_mounted) {
+      setState(() {
+        _isViewingLocationOnly = false;
+      });
+      _showSuccess('Vista de ubicación desactivada');
     }
   }
 
@@ -139,11 +222,12 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
     final user = ref.watch(userProvider);
     final mapState = ref.watch(mapStateProvider);
 
-    // Escuchar cambios de posición y actualizar marcador + socket
+    // Escuchar cambios de posición y actualizar marcador + socket (solo si el servicio está activo)
     ref.listen(mapStateProvider.select((state) => state.currentPosition), (previous, next) async {
-      if (next == null || !_mounted || _mapService == null) return;
+      if (next == null || !_mounted) return;
       
-      if (mapController.isCompleted) {
+      // Solo procesar actualizaciones automáticas si el servicio está activo
+      if (mapState.isServiceActive && _mapService != null && mapController.isCompleted) {
         final controller = await mapController.future;
         await _mapService!.handleLocationUpdate(controller, next);
       }
@@ -155,6 +239,13 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         actions: [
+          // Botón para ver ubicación sin servicio
+          IconButton(
+            icon: Icon(_isViewingLocationOnly ? Icons.location_off : Icons.my_location),
+            onPressed: _isViewingLocationOnly ? _stopLocationViewOnly : _startLocationViewOnly,
+            tooltip: _isViewingLocationOnly ? 'Ocultar Ubicación' : 'Ver Mi Ubicación',
+          ),
+          // Botón para servicio completo
           IconButton(
             icon: Icon(mapState.isServiceActive ? Icons.stop : Icons.play_arrow),
             onPressed: _toggleTracking,
@@ -190,39 +281,74 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
             isServiceActive: mapState.isServiceActive,
           ),
 
-          // Botón de acción principal
+          // Botones de acción principales
           Positioned(
             bottom: 32,
             left: 16,
             right: 16,
-            child: ElevatedButton.icon(
-              onPressed: _toggleTracking,
-              icon: Icon(
-                mapState.isServiceActive ? Icons.stop : Icons.play_arrow,
-                color: Colors.white,
-              ),
-              label: Text(
-                mapState.isServiceActive ? 'Detener Servicio' : 'Iniciar Servicio',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Botón para ver ubicación sin servicio
+                if (!mapState.isServiceActive)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ElevatedButton.icon(
+                      onPressed: _isViewingLocationOnly ? _stopLocationViewOnly : _startLocationViewOnly,
+                      icon: Icon(
+                        _isViewingLocationOnly ? Icons.location_off : Icons.my_location,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        _isViewingLocationOnly ? 'Ocultar Mi Ubicación' : 'Ver Mi Ubicación',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isViewingLocationOnly ? Colors.grey : Colors.blue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                
+                // Botón de servicio principal
+                ElevatedButton.icon(
+                  onPressed: _toggleTracking,
+                  icon: Icon(
+                    mapState.isServiceActive ? Icons.stop : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    mapState.isServiceActive ? 'Detener' : 'Iniciar',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: mapState.isServiceActive ? Colors.red : Colors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: mapState.isServiceActive ? Colors.red : Colors.green,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              ],
             ),
           ),
 
           // Información de ubicación actual
           if (mapState.currentPosition != null)
             Positioned(
-              bottom: 120,
+              bottom: mapState.isServiceActive ? 120 : 180,
               left: 16,
               right: 16,
               child: Container(
@@ -231,15 +357,33 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
                   color: Colors.black.withOpacity(0.7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  'Lat: ${mapState.currentPosition!.latitude.toStringAsFixed(6)}\n'
-                  'Lng: ${mapState.currentPosition!.longitude.toStringAsFixed(6)}\n'
-                  'Precisión: ${mapState.currentPosition!.accuracy.toStringAsFixed(1)}m',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isViewingLocationOnly 
+                        ? '📍 Ubicación Actual (Solo Vista)' 
+                        : mapState.isServiceActive 
+                          ? '📡 Ubicación en Tiempo Real' 
+                          : '📍 Última Ubicación Conocida',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Lat: ${mapState.currentPosition!.latitude.toStringAsFixed(6)}\n'
+                      'Lng: ${mapState.currentPosition!.longitude.toStringAsFixed(6)}\n'
+                      'Precisión: ${mapState.currentPosition!.accuracy.toStringAsFixed(1)}m',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

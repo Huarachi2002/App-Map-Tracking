@@ -41,7 +41,7 @@ class TrackingSocketService{
   Timer? _reconnectTimer;
 
   // Duración entre actualizaciones de ubicación (en segundos)
-  int _updateInterval = 10; // Aumentar a 5 segundos para evitar spam
+  int _updateInterval = 5; // Aumentar a 5 segundos para evitar spam
   set updateInterval(int seconds) {
     _updateInterval = seconds;
     _restartLocationTracking();

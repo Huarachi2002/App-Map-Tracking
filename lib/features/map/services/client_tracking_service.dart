@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -422,7 +424,7 @@ class ClientTrackingService {
 
   void _startConnectionMonitoring() {
     _connectionCheckTimer?.cancel();
-    _connectionCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _connectionCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (!_mounted) {
         timer.cancel();
         return;
@@ -568,6 +570,23 @@ class ClientTrackingService {
   
   void setMapController(MapLibreMapController controller) {
     _currentController = controller;
+    // Cargar imagen del bus-marker (basado en técnicas de Medium para marcadores personalizados)
+    _loadBusMarkerImage(controller);
+  }
+
+  Future<void> _loadBusMarkerImage(MapLibreMapController controller) async {
+    try {
+      print('🖼️ Cargando imagen bus-marker para cliente...');
+      
+      final ByteData busIconData = await rootBundle.load('assets/images/bus-marker.png');
+      final Uint8List busIconBytes = busIconData.buffer.asUint8List();
+      
+      await controller.addImage('bus-marker', busIconBytes);
+      
+      print('✅ Imagen bus-marker cargada exitosamente para cliente');
+    } catch (e) {
+      print('⚠️ Error cargando imagen bus-marker: $e - usando fallback emoji');
+    }
   }
   
   Future<void> updateMicroLocationOnMap(

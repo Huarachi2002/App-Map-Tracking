@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../providers/map_state_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class MarkerService {
   final WidgetRef ref;
@@ -23,6 +26,18 @@ class MarkerService {
   void dispose() {
     _mounted = false;
     _markerHealthTimer?.cancel();
+  }
+
+  // ========== UTILITY METHODS ==========
+  
+  Future<Uint8List?> _loadImageFromAssets(String path) async {
+    try {
+      final ByteData data = await rootBundle.load(path);
+      return data.buffer.asUint8List();
+    } catch (e) {
+      print('❌ Error cargando imagen desde assets: $e');
+      return null;
+    }
   }
 
   // ========== MARKER MANAGEMENT ==========
@@ -71,14 +86,93 @@ class MarkerService {
   }
 
   Future<void> _createMarkerWithFallbacks(MapLibreMapController controller, LatLng location) async {
-    // Nivel 1: Emoji con fondo
-    if (await _createEmojiMarker(controller, location)) return;
+    final user = ref.read(userProvider);
     
-    // Nivel 2: Texto con halo
-    if (await _createTextMarker(controller, location)) return;
+    // Para CHOFERES: usar icono de bus (sin círculo)
+    if (user?.esMicrero == true) {
+      if (await _createBusIconMarker(controller, location)) {
+        print('✅ Marcador de bus (chofer) creado sin círculo');
+        return;
+      }
+    }
+    // Para CLIENTES: usar icono de persona (sin círculo)
+    else if (user?.esCliente == true) {
+      if (await _createClientIconMarker(controller, location)) {
+        print('✅ Marcador de cliente creado sin círculo');
+        return;
+      }
+    }
     
-    // Nivel 3: Círculo geométrico (garantizado)
+    // Fallbacks con círculo geométrico
+    print('📍 Creando marcador de fallback con círculo...');
+    
+    // Nivel 2: Emoji con círculo de fondo
+    if (await _createEmojiMarker(controller, location)) {
+      await _createGeometricMarker(controller, location);
+      return;
+    }
+    
+    // Nivel 3: Texto con círculo de fondo
+    if (await _createTextMarker(controller, location)) {
+      await _createGeometricMarker(controller, location);
+      return;
+    }
+    
+    // Nivel 4: Solo círculo geométrico (garantizado)
     await _createGeometricMarker(controller, location);
+  }
+
+  Future<bool> _createBusIconMarker(MapLibreMapController controller, LatLng location) async {
+    try {
+      // Primero cargar la imagen desde assets
+      final imageBytes = await _loadImageFromAssets('assets/images/bus-marker.png');
+      if (imageBytes == null) {
+        print('⚠️ No se pudo cargar la imagen bus-marker.png');
+        return false;
+      }
+      
+      // Agregar la imagen al mapa
+      await controller.addImage('bus-marker', imageBytes);
+      
+      _currentMarker = await controller.addSymbol(SymbolOptions(
+        geometry: location,
+        iconImage: 'bus-marker',
+        iconSize: 1.0, // Tamaño más grande para mejor visibilidad
+        iconAnchor: 'bottom', // Anclar por la parte inferior
+        iconOffset: const Offset(0, 0),
+      ));
+
+      ref.read(mapStateProvider.notifier).setCurrentLocationSymbol(_currentMarker);
+      print('✅ Marcador con ícono de bus creado');
+      return true;
+
+    } catch (e) {
+      print('⚠️ Fallo marcador con ícono de bus: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _createClientIconMarker(MapLibreMapController controller, LatLng location) async {
+    try {
+      _currentMarker = await controller.addSymbol(SymbolOptions(
+        geometry: location,
+        textField: '📍', // Icono de ubicación para cliente
+        textColor: '#2196F3', // Azul para cliente
+        textSize: 32.0,
+        textHaloColor: '#FFFFFF',
+        textHaloWidth: 3.0,
+        textOffset: const Offset(0, 0),
+        textAnchor: 'center',
+      ));
+
+      ref.read(mapStateProvider.notifier).setCurrentLocationSymbol(_currentMarker);
+      print('✅ Marcador de cliente creado');
+      return true;
+
+    } catch (e) {
+      print('⚠️ Fallo marcador de cliente: $e');
+      return false;
+    }
   }
 
   Future<bool> _createEmojiMarker(MapLibreMapController controller, LatLng location) async {
@@ -225,7 +319,7 @@ class MarkerService {
     if (!_mounted) return;
     
     _markerHealthTimer?.cancel();
-    _markerHealthTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+    _markerHealthTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (!_mounted || !ref.read(mapStateProvider).isServiceActive) {
         timer.cancel();
         return;

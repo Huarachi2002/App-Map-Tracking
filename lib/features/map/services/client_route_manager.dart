@@ -130,9 +130,13 @@ class ClientRouteManager {
               if (points.isNotEmpty) {
                 await mapController.drawRouteOnMap(points);
                 await mapController.addRouteMarkers(points, ruta.nombre);
+                
+                // NUEVO: Cargar paradas de la ruta (basado en GeeksforGeeks múltiples marcadores)
+                print('🚏 Cargando paradas para la ruta ${ruta.id}...');
+                await mapController.loadParadasForRuta(ruta.id);
               }
             } catch (e) {
-              print('❌ Error dibujando ruta: $e');
+              print('❌ Error dibujando ruta o cargando paradas: $e');
             }
           });
         }
@@ -165,7 +169,7 @@ class ClientRouteManager {
     _setupMapController();
     
     // Revisar cada 3 segundos si hay nuevas ubicaciones de micros (menos frecuente para reducir carga)
-    Timer.periodic(const Duration(seconds: 3), (timer) async {
+    Timer.periodic(const Duration(seconds: 2), (timer) async {
       if (_trackingService == null || !_trackingService!.isConnected) {
         timer.cancel();
         return;
@@ -226,9 +230,9 @@ class ClientRouteManager {
     
     final result = await context.push("/search-route");
     if (result == true) {
-      print('✅ Invalidando providers para recargar ruta...');
-      ref.invalidate(entidadIdProvider);
-      ref.invalidate(searchRutasProvider);
+      print('✅ Nueva ruta seleccionada - invalidando solo si es necesario...');
+      // MEJORADO: Solo invalidar si realmente se seleccionó una nueva ruta
+      // La invalidación se manejará automáticamente cuando se actualice selectedRutaProvider
     }
     
     return result as bool?;
@@ -259,12 +263,13 @@ class ClientRouteManager {
     });
     
     mapController.clearRoute();
+    // NUEVO: Limpiar paradas también
+    mapController.clearParadas();
     
-    // Invalidar providers para limpiar datos
-    ref.invalidate(entidadIdProvider);
-    ref.invalidate(searchRutasProvider);
+    // MEJORADO: Limpiar providers específicos en lugar de invalidar todo
+    ref.read(selectedRutaProvider.notifier).state = null;
     
-    print('✅ Ruta y tracking limpiados');
+    print('✅ Ruta, paradas y tracking limpiados');
   }
 
   // ========== DISPOSE ==========

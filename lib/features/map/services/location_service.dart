@@ -46,7 +46,7 @@ class LocationService {
     }
     
     // Iniciar timer de ubicación
-    _locationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+    _locationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (!_mounted || !ref.read(mapStateProvider).isServiceActive) {
         timer.cancel();
         return;

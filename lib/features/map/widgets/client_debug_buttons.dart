@@ -13,6 +13,8 @@ import '../../../domain/repositories/providers/ruta_repository_provider.dart';
 import '../../providers/entidad_provider.dart';
 import '../../providers/ruta_provider.dart';
 import '../../providers/entidad_id_provider.dart';
+import '../../providers/parada_provider.dart';
+import '../widgets/client_paradas_list.dart';
 
 class ClientDebugButtons extends ConsumerWidget {
   final Function()? onRouteCleared;
@@ -24,6 +26,8 @@ class ClientDebugButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final paradas = ref.watch(selectedParadasProvider);
+    
     return Stack(
       children: [
         // Botón de debug
@@ -65,9 +69,52 @@ class ClientDebugButtons extends ConsumerWidget {
           ),
         ),
         
+        // NUEVO: Botón de mostrar paradas (solo aparece si hay paradas)
+        if (paradas.isNotEmpty)
+          Positioned(
+            top: 220,
+            right: 16,
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: "paradas_list_btn",
+              backgroundColor: Colors.blue[700],
+              onPressed: () => _showParadasModal(context),
+              child: Stack(
+                children: [
+                  const Icon(Icons.bus_alert, color: Colors.white),
+                  // Badge con número de paradas
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        '${paradas.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
         // Botón de actualizar a Santa Cruz
         Positioned(
-          top: 220,
+          top: 270,
           right: 16,
           child: FloatingActionButton(
             mini: true,
@@ -80,7 +127,7 @@ class ClientDebugButtons extends ConsumerWidget {
         
         // Botón de ubicación de BD
         Positioned(
-          top: 270,
+          top: 320,
           right: 16,
           child: FloatingActionButton(
             mini: true,
@@ -93,7 +140,7 @@ class ClientDebugButtons extends ConsumerWidget {
         
         // Botón de debug de micros
         Positioned(
-          top: 320,
+          top: 370,
           right: 16,
           child: FloatingActionButton(
             mini: true,
@@ -403,5 +450,21 @@ class ClientDebugButtons extends ConsumerWidget {
         );
       }
     }
+  }
+
+  // NUEVA función para mostrar las paradas en un modal
+  void _showParadasModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: const ClientParadasList(),
+      ),
+    );
   }
 } 
