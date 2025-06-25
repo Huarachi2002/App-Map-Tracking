@@ -15,7 +15,7 @@ class TarjetaRepositoryImpl implements TarjetaRepository {
   @override
   Future<TarjetaModel> getTarjetaByCliente(String idCliente) async {
     final tarjeta = await apiDatasource.getTarjetaByCliente(idCliente);
-    await localDatasource.saveTarjeta(tarjeta);
+    // await localDatasource.saveTarjeta(tarjeta);
     return tarjeta;
   }
 

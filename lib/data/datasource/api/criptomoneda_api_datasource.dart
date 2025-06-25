@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../config/constants.dart';
 import 'api_service_cripto.dart';
 
@@ -34,4 +36,30 @@ class CriptomonedaApiDatasource {
     }
     return (data['VALUE'] as num).toDouble();
   }
+
+  Future<Map<String, dynamic>> recargarTarjeta({
+    required String idTarjeta,
+    required double montoCripto,
+    required String tipoCripto,
+    required double tasaConversion,
+    required String token,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final authToken = prefs.getString('auth_token');
+
+    final data = {
+      'id_tarjeta': idTarjeta,
+      'monto_cripto': montoCripto,
+      'tipo_cripto': tipoCripto,
+      'tasa_conversion': tasaConversion,
+    };
+    return await _apiService.post(
+      'tarjeta/recargar',
+      data,
+      headers: {
+        'auth-token': authToken ?? '',
+      },
+    );
+  }
+
 }

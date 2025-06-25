@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/providers/auth_provider.dart';
 import '../providers/criptomonedas_provider.dart';
-import '../providers/tipo_cambio_cripto_provider.dart';
+import '../providers/tarjeta_provider.dart';
+import '../../../data/datasource/api/criptomoneda_api_datasource.dart';
+
+final selectedCriptoProvider = StateProvider<String?>((ref) => null);
 
 class CargarTarjetaPage extends ConsumerStatefulWidget {
   const CargarTarjetaPage({super.key});
@@ -13,47 +17,85 @@ class CargarTarjetaPage extends ConsumerStatefulWidget {
 }
 
 class _CargarTarjetaPageState extends ConsumerState<CargarTarjetaPage> {
-  final TextEditingController _montoController = TextEditingController();
-  final TextEditingController _tipoCambioController = TextEditingController();
-  final TextEditingController _saldoController = TextEditingController();
-  final TextEditingController _monedaController = TextEditingController(text: 'BOB');
+  final TextEditingController montoController = TextEditingController();
+  final TextEditingController saldoController = TextEditingController(text: 'Bs 150.50');
+  final TextEditingController monedaController = TextEditingController(text: 'BOB');
 
-  String? selectedCripto;
-  double saldoTarjeta = 150.50;
-  double monto = 0.0;
+  double? tipoCambio;
+  bool tipoCambioLoading = false;
+  String? tipoCambioError;
+
+  bool _recargando = false;
+  String? _recargaRespuesta;
 
   @override
-  void initState() {
-    super.initState();
-    _saldoController.text = 'Bs ${saldoTarjeta.toStringAsFixed(2)}';
-
-    // Escuchar cambios en el monto sin setState innecesario
-    _montoController.addListener(_onMontoChanged);
+  void dispose() {
+    montoController.dispose();
+    saldoController.dispose();
+    monedaController.dispose();
+    super.dispose();
   }
 
-  void _onMontoChanged() {
-    final newMonto = double.tryParse(_montoController.text.replaceAll(',', '.')) ?? 0.0;
-    if (newMonto != monto) {
-      monto = newMonto;
-      // Solo actualizar si realmente cambió
-      if (mounted) {
-        setState(() {});
-      }
+  Future<void> _fetchTipoCambio(String origen) async {
+    setState(() {
+      tipoCambioLoading = true;
+      tipoCambioError = null;
+    });
+    try {
+      final service = CriptomonedaApiDatasource();
+      final value = await service.getTipoCambioCripto(origen, 'BOB');
+      setState(() {
+        tipoCambio = value;
+        tipoCambioLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        tipoCambioError = 'Error al obtener tipo de cambio';
+        tipoCambioLoading = false;
+      });
+    }
+  }
+
+  Future<void> _recargarCredito(double montoBOB, double criptoEquivalente, String tipoCripto, double tasaConversion) async {
+    setState(() {
+      _recargando = true;
+      _recargaRespuesta = null;
+    });
+    try {
+      // Aquí debes obtener el id del cliente autenticado
+      final user = ref.watch(userProvider);
+      final idCliente = user?.id;
+      final tarjetaAsync = idCliente != null ? ref.watch(tarjetaByClienteProvider(idCliente)) : null;
+      // Aquí deberías obtener el token real del usuario autenticado
+      final token = 'TOKEN_DEL_USUARIO';
+      final idTarjeta = tarjetaAsync?.maybeWhen(data: (t) => t.codigo, orElse: () => null);
+      final response = await CriptomonedaApiDatasource().recargarTarjeta(
+
+
+    // Parámetros para el pago
+        idTarjeta: idTarjeta?? '',
+        montoCripto: criptoEquivalente,
+        tipoCripto: tipoCripto,
+        tasaConversion: tasaConversion,
+        token: token,
+      );
+      setState(() {
+        _recargando = false;
+        _recargaRespuesta = 'Recarga exitosa: ${response.toString()}';
+      });
+    } catch (e) {
+      setState(() {
+        _recargando = false;
+        _recargaRespuesta = 'Error: ${e.toString()}';
+      });
     }
   }
 
   @override
-  void dispose() {
-    _montoController.removeListener(_onMontoChanged);
-    _montoController.dispose();
-    _tipoCambioController.dispose();
-    _saldoController.dispose();
-    _monedaController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final criptoAsync = ref.watch(criptomonedasProvider);
+    final selectedCripto = ref.watch(selectedCriptoProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cargar Tarjeta'),
@@ -67,7 +109,133 @@ class _CargarTarjetaPageState extends ConsumerState<CargarTarjetaPage> {
             child: IntrinsicHeight(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
-                child: _buildContent(),
+                child: criptoAsync.when(
+                  data: (criptos) {
+                    final simbolos = criptos.map((c) => c.simbolo).toList();
+                    if (simbolos.isNotEmpty && (selectedCripto == null || !simbolos.contains(selectedCripto))) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        ref.read(selectedCriptoProvider.notifier).state = simbolos.first;
+                        _fetchTipoCambio(simbolos.first);
+                      });
+                    }
+                    final dropdownValue = simbolos.contains(selectedCripto) ? selectedCripto : null;
+                    double monto = double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0.0;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Monto a cargar',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.left,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: montoController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                          ],
+                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: '0.00',
+                            prefixIcon: Icon(Icons.attach_money),
+                          ),
+                          onChanged: (_) {
+                            setState(() {});
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            const Text('Cripto:', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 16),
+                            DropdownButton<String>(
+                              value: dropdownValue,
+                              items: simbolos.map((simbolo) => DropdownMenuItem(
+                                value: simbolo,
+                                child: Text(simbolo, style: const TextStyle(fontSize: 18)),
+                              )).toList(),
+                              onChanged: (value) {
+                                if (value != null && value != selectedCripto) {
+                                  ref.read(selectedCriptoProvider.notifier).state = value;
+                                  _fetchTipoCambio(value);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(
+                            labelText: 'Moneda',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.monetization_on),
+                          ),
+                          controller: monedaController,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTipoCambioManual(dropdownValue, monto),
+                        const SizedBox(height: 16),
+                        TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(
+                            labelText: 'Saldo actual de tarjeta',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.credit_card),
+                          ),
+                          controller: saldoController,
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _recargando || tipoCambio == null || dropdownValue == null
+                                ? null
+                                : () {
+                                    final montoBOB = double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0.0;
+                                    final criptoEquivalente = tipoCambio! > 0 ? montoBOB / tipoCambio! : 0.0;
+                                    _recargarCredito(montoBOB, criptoEquivalente, dropdownValue, tipoCambio!);
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _recargando
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                                  )
+                                : const Text('Cargar crédito'),
+                          ),
+                        ),
+                        if (_recargaRespuesta != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: Text(
+                              _recargaRespuesta!,
+                              style: TextStyle(
+                                color: _recargaRespuesta!.startsWith('Error') ? Colors.red : Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Error: $e')),
+                ),
               ),
             ),
           ),
@@ -76,154 +244,34 @@ class _CargarTarjetaPageState extends ConsumerState<CargarTarjetaPage> {
     );
   }
 
-  Widget _buildContent() {
-    final criptoAsync = ref.watch(criptomonedasProvider);
-
-    return criptoAsync.when(
-      data: (criptos) {
-        // Inicializar selectedCripto solo una vez
-        if (criptos.isNotEmpty && selectedCripto == null) {
-          selectedCripto = criptos.first.simbolo;
-        }
-
-        final simbolos = criptos.map((c) => c.simbolo).toList();
-        final dropdownValue = simbolos.contains(selectedCripto) ? selectedCripto : null;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 24),
-            const Text(
-              'Monto a cargar',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.left,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _montoController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-              ],
-              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.deepOrange),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: '0.00',
-                prefixIcon: Icon(Icons.attach_money),
-              ),
-              // Remover onChanged que causaba el bucle
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                const Text('Cripto:', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 16),
-                DropdownButton<String>(
-                  value: dropdownValue,
-                  items: simbolos.map((simbolo) => DropdownMenuItem(
-                    value: simbolo,
-                    child: Text(simbolo, style: const TextStyle(fontSize: 18)),
-                  )).toList(),
-                  onChanged: (value) {
-                    if (value != null && value != selectedCripto) {
-                      setState(() {
-                        selectedCripto = value;
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              enabled: false,
-              decoration: const InputDecoration(
-                labelText: 'Moneda',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.monetization_on),
-              ),
-              controller: _monedaController,
-            ),
-            const SizedBox(height: 16),
-            _buildTipoCambio(dropdownValue),
-            const SizedBox(height: 16),
-            TextField(
-              enabled: false,
-              decoration: const InputDecoration(
-                labelText: 'Saldo actual de tarjeta',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.credit_card),
-              ),
-              controller: _saldoController,
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Cargar crédito'),
-              ),
-            ),
-          ],
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
-    );
-  }
-
-  Widget _buildTipoCambio(String? dropdownValue) {
-    if (dropdownValue == null) return const SizedBox.shrink();
-
-    final tipoCambioAsync = ref.watch(tipoCambioCriptoProvider({'origen': dropdownValue, 'destino': 'BOB'}));
-
-    return tipoCambioAsync.when(
-      data: (tipoCambio) {
-        final conversion = monto * tipoCambio;
-        final text = '1 ${dropdownValue} = ${tipoCambio.toStringAsFixed(4)} BOB\nTotal: Bs ${conversion.toStringAsFixed(2)}';
-
-        // Solo actualizar si el texto cambió
-        if (_tipoCambioController.text != text) {
-          _tipoCambioController.text = text;
-        }
-
-        return TextField(
-          enabled: false,
-          decoration: const InputDecoration(
-            labelText: 'Tipo de cambio',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.currency_exchange),
-          ),
-          controller: _tipoCambioController,
-        );
-      },
-      loading: () => const Padding(
+  Widget _buildTipoCambioManual(String? dropdownValue, double monto) {
+    if (tipoCambioLoading) {
+      return const Padding(
         padding: EdgeInsets.symmetric(vertical: 8.0),
         child: LinearProgressIndicator(),
+      );
+    }
+    if (tipoCambioError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          tipoCambioError!,
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+    if (dropdownValue == null || tipoCambio == null) {
+      return const SizedBox.shrink();
+    }
+    // Ahora el usuario ingresa monto en BOB y calculamos el equivalente en cripto
+    final criptoEquivalente = tipoCambio! > 0 ? monto / tipoCambio! : 0.0;
+    final text = 'Bs ${monto.toStringAsFixed(2)} = ${criptoEquivalente.toStringAsFixed(6)} $dropdownValue\n1 $dropdownValue = ${tipoCambio!.toStringAsFixed(4)} BOB';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
       ),
-      error: (e, _) {
-        if (_tipoCambioController.text != 'Error al obtener tipo de cambio') {
-          _tipoCambioController.text = 'Error al obtener tipo de cambio';
-        }
-        return TextField(
-          enabled: false,
-          decoration: const InputDecoration(
-            labelText: 'Tipo de cambio',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.currency_exchange),
-          ),
-          controller: _tipoCambioController,
-        );
-      },
     );
   }
 }
