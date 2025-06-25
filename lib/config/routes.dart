@@ -1,3 +1,6 @@
+import 'package:app_map_tracking/features/map/screens/cargar_tarjeta_page.dart';
+import 'package:app_map_tracking/features/map/screens/cobro_pasaje_page.dart';
+import 'package:app_map_tracking/features/map/screens/scan_price_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +75,21 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/search-route',
       builder: (context, state) => const SearchPage(),
+    ),
+
+    GoRoute(
+      path: '/cobrar-pasaje',
+      builder: (context, state) => const CobroPasajePage(),
+    ),
+
+    GoRoute(
+      path: '/scan-price',
+      builder: (context, state) => const ScanPricePage(),
+    ),
+
+    GoRoute(
+      path: '/cargar-tarjeta',
+      builder: (context, state) => const CargarTarjetaPage(),
     ),
   ],
   

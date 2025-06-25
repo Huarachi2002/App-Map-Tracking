@@ -127,6 +127,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         } catch (e) {
           print('⚠️ Error guardando entidad ID: $e');
         }
+      }else if(user.esCliente){
+
       }
       
       // NUEVO: Guardar datos del usuario para background service

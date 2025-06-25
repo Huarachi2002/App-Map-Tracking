@@ -26,6 +26,8 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   isar: *isar_version
   isar_flutter_libs: *isar_version # contains Isar Core
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^4.0.0
 
 dependency_overrides:
   geolocator_android: 4.6.1

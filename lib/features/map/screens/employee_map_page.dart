@@ -12,7 +12,7 @@ import '../services/location_service.dart';
 import '../services/enhanced_marker_service.dart';
 import '../widgets/map_status_indicator.dart';
 import '../widgets/driver_info_panel.dart';
-import '../widgets/map_floating_buttons.dart';
+import 'package:go_router/go_router.dart';
 
 class EmployeeMapPage extends ConsumerStatefulWidget {
   const EmployeeMapPage({super.key});
@@ -286,58 +286,87 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
             bottom: 32,
             left: 16,
             right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
               children: [
                 // Botón para ver ubicación sin servicio
                 if (!mapState.isServiceActive)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ElevatedButton.icon(
-                      onPressed: _isViewingLocationOnly ? _stopLocationViewOnly : _startLocationViewOnly,
-                      icon: Icon(
-                        _isViewingLocationOnly ? Icons.location_off : Icons.my_location,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        _isViewingLocationOnly ? 'Ocultar Mi Ubicación' : 'Ver Mi Ubicación',
-                        style: const TextStyle(
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton(
+                        onPressed: _isViewingLocationOnly ? _stopLocationViewOnly : _startLocationViewOnly,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isViewingLocationOnly ? Colors.grey : Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Icon(
+                          _isViewingLocationOnly ? Icons.location_off : Icons.my_location,
                           color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isViewingLocationOnly ? Colors.grey : Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          size: 28,
                         ),
                       ),
                     ),
                   ),
-                
+
+                if (mapState.isServiceActive)
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.push('/cobrar-pasaje'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: Icon(
+                          Icons.monetization_on_sharp,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        label: Text( 'Cobrar',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                      ),
+                    ),
+                  ),
+
                 // Botón de servicio principal
-                ElevatedButton.icon(
-                  onPressed: _toggleTracking,
-                  icon: Icon(
-                    mapState.isServiceActive ? Icons.stop : Icons.play_arrow,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    mapState.isServiceActive ? 'Detener' : 'Iniciar',
-                    style: const TextStyle(
+                Expanded(
+                  flex: 3,
+                  child: ElevatedButton.icon(
+                    onPressed: _toggleTracking,
+                    icon: Icon(
+                      mapState.isServiceActive ? Icons.stop : Icons.play_arrow,
                       color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: mapState.isServiceActive ? Colors.red : Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    label: Text(
+                      mapState.isServiceActive ? 'Detener' : 'Iniciar',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: mapState.isServiceActive ? Colors.red : Colors.green,
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -345,56 +374,56 @@ class _EmployeeMapPageState extends ConsumerState<EmployeeMapPage> {
             ),
           ),
 
-          // Información de ubicación actual
-          if (mapState.currentPosition != null)
-            Positioned(
-              bottom: mapState.isServiceActive ? 120 : 180,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isViewingLocationOnly 
-                        ? '📍 Ubicación Actual (Solo Vista)' 
-                        : mapState.isServiceActive 
-                          ? '📡 Ubicación en Tiempo Real' 
-                          : '📍 Última Ubicación Conocida',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Lat: ${mapState.currentPosition!.latitude.toStringAsFixed(6)}\n'
-                      'Lng: ${mapState.currentPosition!.longitude.toStringAsFixed(6)}\n'
-                      'Precisión: ${mapState.currentPosition!.accuracy.toStringAsFixed(1)}m',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          // // Información de ubicación actual
+          // if (mapState.currentPosition != null)
+          //   Positioned(
+          //     bottom: mapState.isServiceActive ? 120 : 180,
+          //     left: 16,
+          //     right: 16,
+          //     child: Container(
+          //       padding: const EdgeInsets.all(12),
+          //       decoration: BoxDecoration(
+          //         color: Colors.black.withOpacity(0.7),
+          //         borderRadius: BorderRadius.circular(8),
+          //       ),
+          //       child: Column(
+          //         crossAxisAlignment: CrossAxisAlignment.start,
+          //         children: [
+          //           Text(
+          //             _isViewingLocationOnly
+          //               ? '📍 Ubicación Actual (Solo Vista)'
+          //               : mapState.isServiceActive
+          //                 ? '📡 Ubicación en Tiempo Real'
+          //                 : '📍 Última Ubicación Conocida',
+          //             style: const TextStyle(
+          //               color: Colors.white,
+          //               fontSize: 14,
+          //               fontWeight: FontWeight.bold,
+          //             ),
+          //           ),
+          //           const SizedBox(height: 4),
+          //           Text(
+          //             'Lat: ${mapState.currentPosition!.latitude.toStringAsFixed(6)}\n'
+          //             'Lng: ${mapState.currentPosition!.longitude.toStringAsFixed(6)}\n'
+          //             'Precisión: ${mapState.currentPosition!.accuracy.toStringAsFixed(1)}m',
+          //             style: const TextStyle(
+          //               color: Colors.white,
+          //               fontSize: 12,
+          //               fontFamily: 'monospace',
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     ),
+          //   ),
         ],
       ),
-      floatingActionButton: MapFloatingButtons(
-        isServiceActive: mapState.isServiceActive,
-        followMicro: mapState.followMicro,
-        onToggleTracking: _toggleTracking,
-        onCenterOnMicro: _centerOnMicro,
-      ),
+      // floatingActionButton: MapFloatingButtons(
+      //   isServiceActive: mapState.isServiceActive,
+      //   followMicro: mapState.followMicro,
+      //   onToggleTracking: _toggleTracking,
+      //   onCenterOnMicro: _centerOnMicro,
+      // ),
     );
   }
 }

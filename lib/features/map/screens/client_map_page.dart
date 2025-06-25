@@ -1,3 +1,4 @@
+import 'package:app_map_tracking/features/map/widgets/client_options_buttons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -13,6 +14,7 @@ import '../widgets/client_search_bar.dart';
 import '../widgets/client_debug_buttons.dart';
 import '../widgets/client_route_info.dart';
 import '../widgets/client_map_widget.dart';
+import 'package:go_router/go_router.dart';
 
 class ClientMapPage extends StatelessWidget {
   const ClientMapPage({super.key});
@@ -170,25 +172,60 @@ class _ClientMapState extends ConsumerState<ClientMap> {
           ClientSearchBar(onSearchTap: () => _routeManager.onSearchTap(context)),
           
           // Botones de debug
-          ClientDebugButtons(onRouteCleared: _routeManager.onRouteCleared),
+          // ClientDebugButtons(onRouteCleared: _routeManager.onRouteCleared),
+          ClientOptionsButtons(onRouteCleared: _routeManager.onRouteCleared),
           
           // Información de ruta
           const ClientRouteInfo(),
           
           // Botón flotante para ubicación (siempre visible)
           Positioned(
-            bottom: 100,
+            bottom: 150,
             right: 16,
-            child: FloatingActionButton(
-              onPressed: _isViewingMyLocation ? _hideMyLocation : _showMyLocation,
-              backgroundColor: _isViewingMyLocation ? Colors.grey[600] : Colors.blue,
-              foregroundColor: Colors.white,
-              tooltip: _isViewingMyLocation ? 'Ocultar Mi Ubicación' : 'Ver Mi Ubicación',
-              child: Icon(_isViewingMyLocation ? Icons.location_off : Icons.my_location),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+
+                const SizedBox(height: 16),
+                FloatingActionButton(
+                  onPressed: _isViewingMyLocation ? _hideMyLocation : _showMyLocation,
+                  backgroundColor: _isViewingMyLocation ? Colors.grey[600] : Colors.blue,
+                  foregroundColor: Colors.white,
+                  tooltip: _isViewingMyLocation ? 'Ocultar Mi Ubicación' : 'Ver Mi Ubicación',
+                  child: Icon(_isViewingMyLocation ? Icons.location_off : Icons.my_location),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => { context.push('/scan-price') },
+                  icon: const Icon(Icons.payment, color: Colors.white),
+                  label: const Text('Pagar pasaje', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => { context.push('/cargar-tarjeta') },
+                  icon: const Icon(Icons.add_card_rounded, color: Colors.white,),
+                  label: const Text('Cargar Tarjeta', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.lightGreen,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-} 
+}

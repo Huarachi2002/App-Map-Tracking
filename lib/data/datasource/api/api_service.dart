@@ -10,11 +10,13 @@ class ApiService {
     required this.baseUrl,
     http.Client? client,
   }) : _client = client ?? http.Client();
-  Future<Map<String, dynamic>> get(String endpoint) async {
+
+  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? headers}) async {
     final response = await _client.get(
       Uri.parse('$baseUrl/$endpoint'),
       headers: {
         'Content-Type': 'application/json',
+        ...?headers,
       },
     );
 
@@ -24,7 +26,8 @@ class ApiService {
       throw Exception('Failed to load data: ${response.statusCode}');
     }
   }
-  Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data) async {
+
+  Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data, {Map<String, String>? headers}) async {
     print("API POST request a: $baseUrl/$endpoint");
     print("Datos enviados: ${jsonEncode(data)}");
 
@@ -32,6 +35,7 @@ class ApiService {
       Uri.parse('$baseUrl/$endpoint'),
       headers: {
         'Content-Type': 'application/json',
+        ...?headers,
       },
       body: jsonEncode(data),
     );
@@ -48,11 +52,13 @@ class ApiService {
       throw Exception('Failed to post data: ${response.statusCode} - ${response.body}');
     }
   }
-  Future<void> put(String endpoint, Map<String, dynamic> data) async {
+
+  Future<void> put(String endpoint, Map<String, dynamic> data, {Map<String, String>? headers}) async {
     final response = await _client.put(
       Uri.parse('$baseUrl/$endpoint'),
       headers: {
         'Content-Type': 'application/json',
+        ...?headers,
       },
       body: jsonEncode(data),
     );
@@ -62,11 +68,12 @@ class ApiService {
     }
   }
 
-  Future<void> delete(String endpoint) async {
+  Future<void> delete(String endpoint, {Map<String, String>? headers}) async {
     final response = await _client.delete(
       Uri.parse('$baseUrl/$endpoint'),
       headers: {
         'Content-Type': 'application/json',
+        ...?headers,
       },
     );
 

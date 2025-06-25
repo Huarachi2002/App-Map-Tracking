@@ -1,3 +1,4 @@
+import 'package:app_map_tracking/data/models/tarjeta_model.dart';
 import 'package:isar/isar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,7 +10,7 @@ import 'package:app_map_tracking/features/auth/models/user_model.dart';
 final isarProvider = FutureProvider<Isar>((ref) async {
   final dir = await getApplicationDocumentsDirectory();
   return await Isar.open(
-    [RutaModelSchema, EntidadModelSchema, ParadaModelSchema],
+    [RutaModelSchema, EntidadModelSchema, ParadaModelSchema, TarjetaModelSchema],
     directory: dir.path,
     inspector: true,
   );

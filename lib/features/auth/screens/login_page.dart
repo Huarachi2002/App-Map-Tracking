@@ -291,7 +291,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       child: ElevatedButton.icon(
                         onPressed: isLoading ? null : () {
                           // Llenar campos automáticamente
-                          _emailController.text = 'marco.chofer@gmail.com';
+                          _emailController.text = 'carlos.mamani@example.com';
                           _passwordController.text = '12345678';
                           // Ejecutar login automáticamente
                           Future.delayed(const Duration(milliseconds: 100), () {
@@ -324,7 +324,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       child: ElevatedButton.icon(
                         onPressed: isLoading ? null : () {
                           // Llenar campos automáticamente
-                          _emailController.text = 'jose.cliente@gmail.com';
+                          _emailController.text = 'juan.perez@example.com';
                           _passwordController.text = '12345678';
                           // Ejecutar login automáticamente
                           Future.delayed(const Duration(milliseconds: 100), () {

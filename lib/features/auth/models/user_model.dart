@@ -15,6 +15,7 @@ class UserModel {
   // Datos específicos para clientes
   final String? telefono;
   final String? direccion;
+  final String? wallet_address;
 
   UserModel({
     required this.id,
@@ -29,6 +30,7 @@ class UserModel {
     this.rutaAsignada,
     this.telefono,
     this.direccion,
+    this.wallet_address
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -67,6 +69,12 @@ class UserModel {
         print('🚌 Micro encontrado: ID=$microId, Placa=$placaMicro');
       }
     }
+
+    String? wallet_address;
+    if(json.containsKey('cliente') && json['cliente'] != null){
+      final clienteData = json['cliente'];
+      wallet_address = clienteData['wallet_address'];
+    }
     
     // Determinar el tipo correcto basado en si tiene empleado
     String tipoFinal = userData['tipo'] ?? 'CLIENTE';
@@ -90,6 +98,7 @@ class UserModel {
       rutaAsignada: json['ruta_asignada'],
       telefono: userData['telefono'],
       direccion: userData['direccion'],
+      wallet_address: wallet_address,
     );
     
     print('✅ UserModel creado: $usuario');
@@ -110,6 +119,7 @@ class UserModel {
       'ruta_asignada': rutaAsignada,
       'telefono': telefono,
       'direccion': direccion,
+      'wallet_address': wallet_address
     };
   }
 
@@ -129,6 +139,7 @@ class UserModel {
     String? rutaAsignada,
     String? telefono,
     String? direccion,
+    String? walletAddress,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -143,6 +154,7 @@ class UserModel {
       rutaAsignada: rutaAsignada ?? this.rutaAsignada,
       telefono: telefono ?? this.telefono,
       direccion: direccion ?? this.direccion,
+      wallet_address: walletAddress?? this.wallet_address,
     );
   }
 
